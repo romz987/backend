@@ -7,9 +7,12 @@
 ## Table of Contents
 
 - [Description](#description)
+- [Session-cursors-transactions](#session-cursors-transactions)
+- [Cursor](#cursor)
 - [References](#References)
 - [Annex A: Schema](#annex-a)
 - [Annex B: psycopg3 vs asyncpg](#annex-b)
+- [Annex C: session, cursors, transactions](#annex-c)
 
 ## Description
 
@@ -48,6 +51,35 @@
    - напрямую работает с Wire Protocol
    - оптимизирован для asyncio (неблокирующие операции, пул соединений)
 
+
+## Session-cursors-transactions
+
+Сессия, курсоры и транзакции
+
+1. Сессия - это логический контекст, возникающий с момента начала подключения и до его завершения (явного или неявного) 
+
+2. В рамках одной сессии объект *connection* управляет состоянием транзакции - изменения можно зафиксировать(commit) или откатить(rollback)
+
+3. В рамках одной сессии может быть создано множество курсоров, они будут сохранять свое состояние между транзакциями
+
+4. Транзакция - это последовательность операций над базой данных, которая выполняется как единое целое
+
+5. По умолчанию транзакция начинается с первого выполненного запроса и завершается выполнением commit или rollback
+
+## Cursor
+
+Курсор - это объект для выполнения запросов и извлечения данных
+
+execute()  
+executemany()  
+copy_from()  
+
+fetchone()  
+fetchmany()  
+fetchall()  
+
+rowcount()
+
 ## References
 
 [PostgreSQL Wire Protocol docs](https://www.postgresql.org/docs/current/protocol.html)\
@@ -69,3 +101,8 @@
 | Производительность | Обычно уступает asyncpg в асинхронных сценариях | Считается более производительным благодаря нативной реализации асинхронных операций и оптимизации для PostgreSQL. |
 | Совместимость с DB-API | Соответствует PEP 249 (DB-API) | Не реализует DB-API, имеет собственный API |
 | Использование | Подходит для проектов, где важна совместимость с синхронным кодом или требуется гибкость настройки | Рекомендуется для высоконагруженных асинхронных приложений, где критична скорость |
+
+
+## Annex C
+
+![session-cursors-transactions](./images/sct.svg)
