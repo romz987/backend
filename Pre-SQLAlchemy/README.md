@@ -1,18 +1,31 @@
-# Python adapters for PostgreSQL review
+# Adapters for SQLAlchemy
+
+<br>
+<br>
 
 ## Abstracts
 
 Здесь дано краткое описание архитектуры взаимодействия RDBMS PostgreSQL с клиентом, в роли которого выступает адаптер.
 
+<br>
+<br>
+
 ## Table of Contents
 
 - [Description](#description)
-- [Session-cursors-transactions](#session-cursors-transactions)
-- [Cursor](#cursor)
+- [Psycopg2](<>)
+  - [Session-cursors-transactions](#session-cursors-transactions)
+  - [Cursor](#cursor)
+    - [execute()](<#execute()>)
+    - [executemany()](<#executemany()>)
+    - [other](#other)
 - [References](#References)
 - [Annex A: Schema](#annex-a)
 - [Annex B: psycopg3 vs asyncpg](#annex-b)
 - [Annex C: session, cursors, transactions](#annex-c)
+
+<br>
+<br>
 
 ## Description
 
@@ -51,34 +64,119 @@
    - напрямую работает с Wire Protocol
    - оптимизирован для asyncio (неблокирующие операции, пул соединений)
 
+<br>
+<br>
 
-## Session-cursors-transactions
+## Psycopg2
+
+### Session-cursors-transactions
 
 Сессия, курсоры и транзакции
 
-1. Сессия - это логический контекст, возникающий с момента начала подключения и до его завершения (явного или неявного) 
+1. Сессия - это логический контекст, возникающий с момента начала подключения и до его завершения (явного или неявного)
 
-2. В рамках одной сессии объект *connection* управляет состоянием транзакции - изменения можно зафиксировать(commit) или откатить(rollback)
+1. В рамках одной сессии объект *connection* управляет состоянием транзакции - изменения можно зафиксировать(commit) или откатить(rollback)
 
-3. В рамках одной сессии может быть создано множество курсоров, они будут сохранять свое состояние между транзакциями
+1. В рамках одной сессии может быть создано множество курсоров, они будут сохранять свое состояние между транзакциями
 
-4. Транзакция - это последовательность операций над базой данных, которая выполняется как единое целое
+1. Транзакция - это последовательность операций над базой данных, которая выполняется как единое целое
 
-5. По умолчанию транзакция начинается с первого выполненного запроса и завершается выполнением commit или rollback
+1. По умолчанию транзакция начинается с первого выполненного запроса и завершается выполнением commit или rollback
 
-## Cursor
+<br>
+<br>
 
-Курсор - это объект для выполнения запросов и извлечения данных
+### Cursor
 
-execute()  
-executemany()  
-copy_from()  
+Курсор - это объект для выполнения запросов и извлечения данных.
 
-fetchone()  
-fetchmany()  
-fetchall()  
+Курсор предлагает несколько методов для выполнения SQL-запросов.\
+Основными из них это *execute()* и *executemany()*.
 
-rowcount()
+<br>
+<br>
+
+#### execute()
+
+```python
+cursor.execute(query, vars=None)
+```
+
+*query* - строка с SQL-запросом (может содержать плейсхолдеры)  
+*vars* - параметры для подстановки (кортеж, список, словарь)
+
+Суть: Выполняет один SQL-запрос (один оператор) с возможностью подстановки параметров
+
+Поддерживает универсальные (%) и именованные (%(name)s) плейсхолдеры
+
+Пример 1: универсальные плейсхолдеры
+
+```python
+cur.execute("INSERT INTO users (name, age) VALUES (%s, %s)", ("Alice", 30))
+```
+
+Пример 2: именованные плейсхолдеры (при использовании словаря)
+
+```python
+cur.execute(
+    "INSERT INTO users (name, age) VALUES (%(name)s, %(age)s)",
+    {"name": "Bob", "age": 25}
+)
+```
+
+Возврат результата:
+
+*SELECT*
+Сохраняет результирующий набор - доступ через fetchone(), fetchmany(), fetchall()
+
+*INSERT/UPDATE/DELETE*
+Всегда возвращает None\
+Но можно получить число затронутых строк через cursor.rowcount
+
+<br>
+<br>
+
+#### executemany()
+
+```python
+cursor.executemany(query, seq_of_vars)
+```
+
+*query* - SQL-запрос с плейсхолдерами\
+*seq_of_vars* - последовательность параметров (список кортежей, список списков или генератор)
+
+Суть: Эффективное выполнение одного и того же запроса для множества наборов параметров.\
+Может быть быстрее, чем цикл с execute()
+
+Поддерживает универсальные (%) и именованные (%(name)s) плейсхолдеры\
+НО не поддерживает именованные плейсхолдеры для списка кортежей
+
+Пример:
+
+```python
+data = [
+    ("Alice", 30),
+    ("Bob", 25),
+    ("Charlie", 35)
+]
+
+cur.executemany("INSERT INTO users (name, age) VALUES (%s, %s)", data)
+```
+
+Возврат результата:
+
+Всегда возвращает None  
+Но можно получить число затронутых строк через cursor.rowcount
+
+<br>
+<br>
+
+#### other
+
+Для случаев с большим объемом данных строит рассмотреть cursor.copy_from() или execute_batch из psycopg2.extras
+
+<br>
+<br>
 
 ## References
 
@@ -89,9 +187,15 @@ rowcount()
 [psycopg3 docs](https://www.psycopg.org/psycopg3/)\
 [asyncpg docs](https://magicstack.github.io/asyncpg/current/)
 
+<br>
+<br>
+
 ## Annex A
 
 ![schema](./images/schema.svg)
+
+<br>
+<br>
 
 ## Annex B
 
@@ -102,6 +206,9 @@ rowcount()
 | Совместимость с DB-API | Соответствует PEP 249 (DB-API) | Не реализует DB-API, имеет собственный API |
 | Использование | Подходит для проектов, где важна совместимость с синхронным кодом или требуется гибкость настройки | Рекомендуется для высоконагруженных асинхронных приложений, где критична скорость |
 
+
+<br>
+<br>
 
 ## Annex C
 
